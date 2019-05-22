@@ -1,85 +1,343 @@
-Geo-OSM-Overpass
+NAME
 
-The README is used to introduce the module and provide instructions on
-how to install the module, any machine dependencies it may have (for
-example C compilers and installed libraries) and any other information
-that should be provided before the module is installed.
+    Geo::OSM::Overpass - Access OpenStreetMap data using the Overpass API
 
-A README file is required for CPAN modules since CPAN extracts the README
-file from a module distribution so that people browsing the archive
-can use it to get an idea of the module's uses. It is usually a good idea
-to provide version information here so that people can decide whether
-fixes for the module are worth downloading.
+VERSION
 
+    Version 0.01
 
-INSTALLATION
+SYNOPSIS
 
-To install this module, run the following commands:
+        use Geo::OSM::Overpass;
+    
+        my $ovp = Geo::OSM::Overpass->new({
+         'timeout' => 10,
+        });
+        $ovp->query(<<EOQ);
+        <osm-script>
+          <union>
+              <query type="node">
+                <has-kv k="highway" v="bus_stop"/>
+                <bbox-query
+            s="35.096464"
+            w="33.273956"
+            n="35.195076"
+            e="33.437240"
+            />
+              </query>
+          </union>
+          <print mode="body"/>
+          <recurse type="down"/>
+          <print mode="skeleton"/>
+        </osm-script>
+    EOQ
+    
+        $ovp->save("output.xml");
+        print $ovp->last_query_text()."\nGot some results back for above query\n".${$ovp->last_query_result()}."\n"
 
-	perl Makefile.PL
-	make
-	make test
-	make install
+SUBROUTINES/METHODS
 
-SUPPORT AND DOCUMENTATION
+    Please note that this module does not provide any high-level data
+    retrieval. One must specify queries using Overpass API language(s), as
+    per the example in the Synopsis. What this module is good at is to
+    initiate the communication with the OpenStreetMap Overpass API server,
+    send the query and get the results back. The real use of this module
+    would be if used in conjuction with plugins (see
+    Geo::OSM::Overpass::Plugin) which abstract API queries to a level where
+    one just says "fetch bus-stops".
 
-After installing, you can find documentation for this module with the
-perldoc command.
+ new($params)
 
-    perldoc Geo::OSM::Overpass
+    Constructor with optional hashref of parameters. Optional parameters
+    are:
 
-You can also look for information at:
+      * ua specify an already created UserAgent object which must be
+      derived from LWP::UserAgent or its subclassed modules. If no
+      UserAgent object is specified, a default will be created at the
+      constructor phase (see also parameter ua-params below).
 
-    RT, CPAN's request tracker (report bugs here)
-        https://rt.cpan.org/NoAuth/Bugs.html?Dist=Geo-OSM-Overpass
+      * ua-params if no UserAgent object is specified via the ua parameter,
+      then a default UserAgent object will be created at the constructor
+      with optional ua-params hashref to be passed to its constructor.
 
-    AnnoCPAN, Annotated CPAN documentation
-        http://annocpan.org/dist/Geo-OSM-Overpass
+      * query-timeout specify the seconds after which query times out, can
+      also be get/set using query_timeout()
 
-    CPAN Ratings
-        https://cpanratings.perl.org/d/Geo-OSM-Overpass
+      * query-output-type specify the output type of the result of the
+      query, can also be get/set using query_output_type()
 
-    Search CPAN
-        https://metacpan.org/release/Geo-OSM-Overpass
+      * overpass-api-url specify the Overpass API url (currently at
+      http://overpass-api.de/api/interpreter), can also be get/set using
+      overpass_api_url()
 
+      * verbosity specify the verbosity, can also be get/set using
+      verbosity()
+
+      * bbox specify the bounding box for the query, can also be get/set
+      using bbox()
+
+      * query-print-mode specify the output print mode, can also be get/set
+      using query_print_mode()
+
+ query($q)
+
+    Send query $q to the OSM Overpass API url using our internal UserAgent
+    object, store $q internally (can be accessed using last_query_text())
+    and get the result back (at the moment of writing as XML, JSON or CSV
+    etc.) and store the result internally so it can be accessed using
+    last_query_result(). See
+    https://wiki.openstreetmap.org/wiki/Overpass_API/Language_Guide#Choose_file_format_.28output.3D.22json.22.2C_.5Bout:json.5D.29
+    for Overpass API language guide which covers both XML-based queries
+    (that means the query is formulated using XML) or QL-based queries, QL
+    being Overpass specially crafter query language. Here is an example
+    XML-based query to fetch all bus stops within the specified bounding
+    box:
+
+        <osm-script>
+          <union>
+              <query type="node">
+                <has-kv k="highway" v="bus_stop"/>
+                <bbox-query
+            s="35.096464"
+            w="33.273956"
+            n="35.195076"
+            e="33.437240"
+            />
+              </query>
+          </union>
+          <print mode="body"/>
+          <recurse type="down"/>
+          <print mode="skeleton"/>
+        </osm-script>
+
+    And here is an example using Overpass QL (taken from
+    https://wiki.openstreetmap.org/wiki/Overpass_API/Language_Guide):
+
+        ["highway"="bus_stop"]
+          ["shelter"]
+          ["shelter"!="no"]
+          (50.7,7.1,50.8,7.25);
+        out body;
+
+    This method returns 1 when it succeeds or 0 when it fails, in which
+    case last_query_result() returns undef.
+
+ save($optional_filename)
+
+    Saves the result of the last query (as returned by last_query_result())
+    to a file. The filename can be specified using optional input parameter
+    $optional_filename, otherwise the output filename set during
+    construction will be used. If none specified, it does no save and
+    complains.
+
+    It returns 1 when it succeeds or 0 when it fails, either because no
+    output filename was ever specified or because saving had failed.
+
+ verbosity($L)
+
+    If no input parameter is specified, then it returns the current
+    verbosity level. Otherwise it sets the current verbosity level to $L.
+    level 0 verbosity means absolute silence, level 1 means basic staff,
+    level 2 means using LWP::ConsoleLogger::Easy and level 3 will mean
+    debugging SSL if and when OSM Overpass API offers SSL connections for a
+    good way to waste their resources.
+
+ last_query_text()
+
+    Returns the text of the last query sent (successful or not) to the API
+    server. May return undef if no query has yet been submitted.
+
+ last_query_result($m)
+
+    If no input parameter is specified, it returns a SCALAR REFERENCE to
+    the string result of the last query performed. This can be undef if no
+    query has yet been executed, or if it returned an error.
+
+    If an input parameter is specified $m (as a string AND NOT as SCALAR
+    REFERENCE), it sets this as the last query result.
+
+ output_filename($m)
+
+    If no input parameter is specified, it returns the output filename
+    already set (can be undef).
+
+    If an input parameter is specified $m, it sets this as the output
+    filename to be used during save(). The optional parameter to save()
+    takes precedence over our internally stored output filename but only
+    temporarily and is not remembered.
+
+ query_timeout($m)
+
+    If no input parameter is specified, it returns the seconds after which
+    a query times out. There is a default value of 25 seconds.
+
+    If an input parameter is specified $m, it sets this as the timeout
+    value.
+
+ query_output_type($m)
+
+    The results returned by a query can be in XML or JSON format. Other
+    formats are also available, see
+    https://wiki.openstreetmap.org/wiki/Overpass_API/Language_Guide#Choose_file_format_.28output.3D.22json.22.2C_.5Bout:json.5D.29
+
+ overpass_api_url($m)
+
+    If no input parameter is specified, it returns the url of the OSM
+    Overpass API.
+
+    If an input parameter is specified $m, it sets this as the API url.
+    Default url is http://overpass-api.de/api/interpreter
+
+ bbox($b)
+
+    If no input parameter is specified, it returns the bounding box (bbox)
+    specific to any future queries.
+
+    If an input parameter is specified $b, it sets this as the bbox for all
+    future queries. There is no default bounding box, one must be specified
+    prior to executing a query which requires it. Be considerate when
+    specifying the bounding box of your searches because a larger box
+    usually entails a higher load for the free OSM servers. Be considerate.
+
+    Internally the bounding box is a Geo::BoundingBox object. This is what
+    is returned when this method acts as a getter. However, in setting the
+    bounding box using $b, one can either create a Geo::BoundingBox object
+    and supply it, or specify an arrayref to be passed to the constructor
+    of Geo::BoundingBox or specify a single string holding the bounding box
+    specification as a string. Refer to Geo::BoundingBox for more
+    information on how to create a bounding box: i.e. via a centred-at
+    spec: lat:lon,width[xheight] or a bounded-by spec:
+    bottom-left-lat:bottom-left-long, top-right-lat:top-right-lon.
+
+ query_print_mode($m)
+
+    This sets the geometry parameter of the print tag part of the query
+    (postamble). Default is skeleton and that works well for when the
+    results consist of nodes, meaning that it will print the coordinates of
+    each node. However, when results consist of ways (which themselves
+    consist of nodes), then this option can be set to center (sic) in order
+    to calculate and print the center of all the nodes making up the way.
+    This is useful in obtaining the centre of roundabouts (which are ways)
+    as part of the result of the query. See for example
+    Geo::OSM::Overpass::Plugin::FetchRoundabouts
+
+ _overpass_XML_preamble()
+
+    This method is only ever required if you write a plugin. It will return
+    the preamble to any query text. The preamble may change if some
+    parameters change, for example timeout.
+
+ _overpass_XML_postamble()
+
+    This method is only ever required if you write a plugin. It will return
+    the postamble to any query text. The postamble may change if some
+    parameters change, for example the query print mode (see
+    query_print_mode()).
+
+AUTHOR
+
+    Andreas Hadjiprocopis, bliako at cpan.org
+
+CAVEATS
+
+    This is alpha release, the API is not yet settled and may change.
+
+BUGS
+
+    Please report any bugs or feature requests to bug-geo-osm-overpass at
+    rt.cpan.org, or through the web interface at
+    https://rt.cpan.org/NoAuth/ReportBug.html?Queue=Geo-OSM-Overpass. I
+    will be notified, and then you'll automatically be notified of progress
+    on your bug as I make changes.
+
+SUPPORT
+
+    You can find documentation for this module with the perldoc command.
+
+        perldoc Geo::OSM::Overpass
+
+    You can also look for information at:
+
+      * https://www.openstreetmap.org main entry point
+
+      * https://wiki.openstreetmap.org/wiki/Overpass_API/Language_Guide
+      Overpass API query language guide.
+
+      * https://overpass-turbo.eu Overpass Turbo query language online
+      sandbox. It can also convert to XML query language.
+
+      * http://overpass-api.de/query_form.html yet another online sandbox
+      and converter.
+
+      * RT: CPAN's request tracker (report bugs here)
+
+      https://rt.cpan.org/NoAuth/Bugs.html?Dist=Geo-OSM-Overpass
+
+      * AnnoCPAN: Annotated CPAN documentation
+
+      http://annocpan.org/dist/Geo-OSM-Overpass
+
+      * CPAN Ratings
+
+      https://cpanratings.perl.org/d/Geo-OSM-Overpass
+
+      * Search CPAN
+
+      https://metacpan.org/release/Geo-OSM-Overpass
+
+DEDICATIONS
+
+    Almaz
+
+ACKNOWLEDGEMENTS
+
+    There would be no need for this module if the great project
+    OpenStreetMap was not conceived, implemented,
+    data-collectively-collected and publicly-served by the great people of
+    the OpenStreetMap project. Thanks!
+
+    ``` @misc{OpenStreetMap, author = {{OpenStreetMap contributors}}, title
+    = {{Planet dump retrieved from https://planet.osm.org }}, howpublished
+    = "\url{ https://www.openstreetmap.org }", year = {2017}, } ```
 
 LICENSE AND COPYRIGHT
 
-Copyright (C) 2019 Andreas Hadjiprocopis
+    Copyright 2019 Andreas Hadjiprocopis.
 
-This program is free software; you can redistribute it and/or modify it
-under the terms of the the Artistic License (2.0). You may obtain a
-copy of the full license at:
+    This program is free software; you can redistribute it and/or modify it
+    under the terms of the the Artistic License (2.0). You may obtain a
+    copy of the full license at:
 
-L<http://www.perlfoundation.org/artistic_license_2_0>
+    http://www.perlfoundation.org/artistic_license_2_0
 
-Any use, modification, and distribution of the Standard or Modified
-Versions is governed by this Artistic License. By using, modifying or
-distributing the Package, you accept this license. Do not use, modify,
-or distribute the Package, if you do not accept this license.
+    Any use, modification, and distribution of the Standard or Modified
+    Versions is governed by this Artistic License. By using, modifying or
+    distributing the Package, you accept this license. Do not use, modify,
+    or distribute the Package, if you do not accept this license.
 
-If your Modified Version has been derived from a Modified Version made
-by someone other than you, you are nevertheless required to ensure that
-your Modified Version complies with the requirements of this license.
+    If your Modified Version has been derived from a Modified Version made
+    by someone other than you, you are nevertheless required to ensure that
+    your Modified Version complies with the requirements of this license.
 
-This license does not grant you the right to use any trademark, service
-mark, tradename, or logo of the Copyright Holder.
+    This license does not grant you the right to use any trademark, service
+    mark, tradename, or logo of the Copyright Holder.
 
-This license includes the non-exclusive, worldwide, free-of-charge
-patent license to make, have made, use, offer to sell, sell, import and
-otherwise transfer the Package with respect to any patent claims
-licensable by the Copyright Holder that are necessarily infringed by the
-Package. If you institute patent litigation (including a cross-claim or
-counterclaim) against any party alleging that the Package constitutes
-direct or contributory patent infringement, then this Artistic License
-to you shall terminate on the date that such litigation is filed.
+    This license includes the non-exclusive, worldwide, free-of-charge
+    patent license to make, have made, use, offer to sell, sell, import and
+    otherwise transfer the Package with respect to any patent claims
+    licensable by the Copyright Holder that are necessarily infringed by
+    the Package. If you institute patent litigation (including a
+    cross-claim or counterclaim) against any party alleging that the
+    Package constitutes direct or contributory patent infringement, then
+    this Artistic License to you shall terminate on the date that such
+    litigation is filed.
 
-Disclaimer of Warranty: THE PACKAGE IS PROVIDED BY THE COPYRIGHT HOLDER
-AND CONTRIBUTORS "AS IS' AND WITHOUT ANY EXPRESS OR IMPLIED WARRANTIES.
-THE IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
-PURPOSE, OR NON-INFRINGEMENT ARE DISCLAIMED TO THE EXTENT PERMITTED BY
-YOUR LOCAL LAW. UNLESS REQUIRED BY LAW, NO COPYRIGHT HOLDER OR
-CONTRIBUTOR WILL BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, OR
-CONSEQUENTIAL DAMAGES ARISING IN ANY WAY OUT OF THE USE OF THE PACKAGE,
-EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+    Disclaimer of Warranty: THE PACKAGE IS PROVIDED BY THE COPYRIGHT HOLDER
+    AND CONTRIBUTORS "AS IS' AND WITHOUT ANY EXPRESS OR IMPLIED WARRANTIES.
+    THE IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+    PURPOSE, OR NON-INFRINGEMENT ARE DISCLAIMED TO THE EXTENT PERMITTED BY
+    YOUR LOCAL LAW. UNLESS REQUIRED BY LAW, NO COPYRIGHT HOLDER OR
+    CONTRIBUTOR WILL BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, OR
+    CONSEQUENTIAL DAMAGES ARISING IN ANY WAY OUT OF THE USE OF THE PACKAGE,
+    EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
