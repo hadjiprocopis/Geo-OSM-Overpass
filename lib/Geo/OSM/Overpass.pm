@@ -335,7 +335,7 @@ sub	_overpass_XML_postamble {
 }
 
 # pod starts here
-
+=encoding utf8
 =head1 NAME
 
 Geo::OSM::Overpass - Access OpenStreetMap data using the Overpass API
